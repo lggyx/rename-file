@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>rename-file 重构原型 · 撤销机制思路验证</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1f2933; --muted: #6b7684;
+    --line: #d9dee5; --accent: #2563eb; --ok: #16a34a; --warn: #d97706;
+    --bad: #dc2626; --chip: #eef2f7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; }
+  header { padding: 20px 28px 14px; border-bottom: 3px solid var(--ink); background: var(--panel); }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--muted); }
+  .steps { display: flex; gap: 8px; margin: 14px 28px 0; }
+  .step { padding: 6px 14px; border: 2px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-weight: 600; }
+  .step.on { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+  .step.done { border-color: var(--ok); color: var(--ok); }
+  main { padding: 16px 28px 40px; }
+  h2 { font-size: 16px; margin: 28px 0 10px; padding-left: 10px; border-left: 4px solid var(--accent); }
+  .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .panel h3 { margin: 0 0 10px; font-size: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  select, input[type=text], input[type=checkbox] { font: inherit; }
+  select, input[type=text] { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  input[type=text] { width: 130px; }
+  button { font: inherit; padding: 6px 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.danger { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 600; background: var(--chip); }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .tag.ok { background: #dcfce7; color: var(--ok); }
+  .tag.same { background: var(--chip); color: var(--muted); }
+  .tag.bad { background: #fee2e2; color: var(--bad); }
+  .tag.warn { background: #fef3c7; color: var(--warn); }
+  .filelist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .filelist span { background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-family: Consolas, monospace; font-size: 12px; }
+  .filelist span.new { background: #eff6ff; border-color: var(--accent); }
+  .oplist { list-style: none; margin: 0; padding: 0; }
+  .oplist li { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; cursor: pointer; }
+  .oplist li:hover { border-color: var(--accent); }
+  .oplist li.undone { opacity: .55; }
+  .oplist .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 10px; overflow: auto; font-size: 12.5px; line-height: 1.55; }
+  .muted { color: var(--muted); }
+  .msg { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 13px; display: none; }
+  .msg.show { display: block; }
+  .msg.info { background: #eff6ff; border: 1px solid #bfdbfe; }
+  .msg.warn { background: #fef3c7; border: 1px solid #fde68a; }
+  .decide { border-left: 4px solid var(--warn); background: #fffbeb; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 10px 0; }
+  .decide b { display: block; margin-bottom: 4px; }
+  ol li, ul li { margin: 6px 0; line-height: 1.6; }
+  .modal-mask { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .modal-mask.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 18px 20px; width: min(680px, 92vw); max-height: 84vh; overflow: auto; }
+  .modal h4 { margin: 0 0 10px; }
+  .modal .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+  code { background: var(--chip); padding: 1px 6px; border-radius: 4px; font-family: Consolas, monospace; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>rename-file 重构原型 · 撤销机制思路验证（纯前端模拟，不碰真实文件）</h1>
+  <p>对应子 Prompt #19 任务 A「撤销功能」。目的：在写任何 Python 之前，把撤销交互、日志结构、边界场景跑给你看，确认思路后再进入流程图阶段。</p>
+</header>
+
+<div class="steps">
+  <div class="step on">① 原型 HTML · 验证思路 ← 当前</div>
+  <div class="step">② 流程图（Mermaid）</div>
+  <div class="step">③ 实际产物（refactor 分支）</div>
+</div>
+
+<main>
+
+<div class="grid">
+  <div class="panel">
+    <h3>模拟沙箱：规则 → 预览 → 执行 → 撤销</h3>
+
+    <div class="row"><b>沙箱目录（模拟 D:/demo，可重置）：</b><button onclick="resetSandbox()">重置沙箱</button></div>
+    <div class="filelist" id="fileList"></div>
+
+    <div class="row" style="margin-top:14px">
+      <b>规则：</b>
+      <select id="ruleType" onchange="renderRuleInputs()">
+        <option value="prefix">前缀添加</option>
+        <option value="suffix">后缀添加</option>
+        <option value="replace">字符串替换</option>
+        <option value="regex">正则替换</option>
+      </select>
+      <span id="ruleInputs"></span>
+      <label><input type="checkbox" id="caseSensitive"> 大小写敏感</label>
+    </div>
+
+    <div class="row">
+      <button class="primary" onclick="doPreview()">预览修改</button>
+      <button id="execBtn" class="danger" onclick="doExecute()" disabled>执行修改</button>
+      <button id="undoBtn" class="primary" onclick="doUndo()" disabled>撤销上次操作</button>
+    </div>
+
+    <div id="previewArea"></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="panel">
+    <h3>操作历史（保留最近 10 次，点击看 JSON）</h3>
+    <ul class="oplist" id="opList"></ul>
+    <div id="jsonView"><p class="muted">点击上方任一操作查看其撤销日志 JSON 结构提案。</p></div>
+  </div>
+</div>
+
+<h2>①b 大小写改名边界（Windows 两步法）</h2>
+<div class="panel">
+  <p style="margin-top:0">Windows 上 <code>readme.txt → Readme.txt</code> 直接 rename 会报错（大小写不敏感文件系统认为是同名）。
+  方案：先改成临时名，再改回来。<b>试一下：</b>规则选「字符串替换」，查找 <code>readme</code> 替换为 <code>Readme</code>，勾选大小写敏感，预览 → 执行，
+  然后点历史记录看日志里的 <code>case_only / via_tmp</code> 字段；再撤销，撤销同样是两步。</p>
+</div>
+
+<h2>② 操作日志 JSON 结构（提案）</h2>
+<div class="panel">
+<p style="margin-top:0">每次「执行修改」写一份日志到 <code>%APPDATA%/rename-file/history/op_*.json</code>，撤销=读最近一份未撤销日志逆向执行。删除/归档策略见下方决策点 4。</p>
+<pre>{
+  "version": 1,
+  "op_id": "op_20260904_012345",
+  "created_at": "2026-09-04T01:23:45+08:00",
+  "base_dir": "D:/demo",
+  "recursive": false,
+  "rule": { "type": "regex", "params": { "find": "^IMG_", "replace": "2023_" }, "case_sensitive": true },
+  "file_count": 2,
+  "entries": [
+    { "from": "IMG_0001.jpg", "to": "2023_0001.jpg", "status": "ok",
+      "case_only": false, "via_tmp": null },
+    { "from": "readme.txt", "to": "Readme.txt", "status": "ok",
+      "case_only": true, "via_tmp": "__rename_tmp_op_20260904_012345_Readme.txt" }
+  ],
+  "undone": false,
+  "undone_at": null,
+  "undo_result": null
+}</pre>
+<p class="muted">撤销成功后写回：<code>"undone": true</code>，<code>"undo_result": { "restored": 2, "skipped": [ { "from": "...", "reason": "目标名已存在，跳过" } ] }</code>。冲突文件绝不覆盖，只跳过并留痕。</p>
+</div>
+
+<h2>③ CLI 交互（提案，与 GUI 共用同一个 core）</h2>
+<div class="panel">
+<pre>$ rename-cli --dry-run --dir D:/photos --filter "*.jpg" --rule regex "^IMG_" "2023_"
+  预览 12 条变更（--dry-run 不落盘、不写日志）
+$ rename-cli --apply --dir D:/photos --rule regex "^IMG_" "2023_"
+  已重命名 12 个文件，日志: %APPDATA%/rename-file/history/op_20260904_013020.json
+$ rename-cli --undo                # 撤销最近一次
+  已还原 12 个文件
+$ rename-cli --undo --list         # 列出可撤销的操作栈</pre>
+</div>
+
+<h2>④ 待你拍板的决策点</h2>
+<div class="decide"><b>1. GUI 框架（最重要）</b>现有代码是 <b>wxPython</b>（<code>import wx</code>），但子 Prompt #19 写的是「tkinter（不换框架）」，两者矛盾。A. 按 prompt 迁移 tkinter：零第三方依赖、exe 体积小，但要重写全部 UI；B. 保留 wxPython：改 prompt，UI 不动只加撤销。本原型的布局对两者通用。</div>
+<div class="decide"><b>2. 撤销是否需要确认</b>原型采用「先弹还原预览（标明每条 可还原/冲突跳过），点确认才执行」。也可以做成一键直接撤。</div>
+<div class="decide"><b>3. 撤销深度</b>Prompt 定的是保留最近 10 次可逐步回退。已撤销的日志是归档保留（可追溯）还是直接删除？原型按「归档保留、不再可撤」处理。</div>
+<div class="decide"><b>4. 嵌套撤销的顺序</b>严格按栈：只能撤最新一次，撤完才能撤上一次（原型如此）。要不要支持任意跳选某一次操作来撤？（不支持则实现简单、心智模型清晰）</div>
+<div class="decide"><b>5. 日志目录</b><code>%APPDATA%/rename-file/history/</code>（提案，跨工作目录可用）还是放在操作目标目录里（随目录走，但会污染用户目录）？</div>
+
+</main>
+
+<!-- 撤销确认弹窗 -->
+<div class="modal-mask" id="undoModal">
+  <div class="modal">
+    <h4>撤销预览：还原操作 <span id="undoOpId"></span></h4>
+    <div id="undoPreviewBody"></div>
+    <p class="muted" style="font-size:12px">「冲突跳过」= 原文件名已被新文件占用。已跳过的条目不覆盖、不报错，留痕在 undo_result 里。</p>
+    <div class="actions">
+      <button onclick="closeUndoModal()">取消</button>
+      <button class="primary" onclick="confirmUndo()">确认撤销</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const INIT_FILES = ['报告 final.docx','报告_final_v2.docx','IMG_0001.jpg','IMG_0002.jpg','IMG_0003.jpg','notes.txt','readme.txt','todo.txt','data-2023.csv','data-2024.csv','临时~1.tmp'];
+let fsState = [];      // 当前沙箱里的文件名
+let history = [];      // 操作日志栈
+let previewData = [];  // [{from,to,status,caseOnly}]
+
+const $ = id => document.getElementById(id);
+
+function resetSandbox() {
+  fsState = [...INIT_FILES];
+  history = [];
+  previewData = [];
+  $('previewArea').innerHTML = '';
+  $('execBtn').disabled = true;
+  renderFiles(); renderHistory(); showMsg('沙箱已重置（历史日志已清空）', 'info');
+}
+
+function renderFiles() {
+  $('fileList').innerHTML = fsState.map(f => `<span>${esc(f)}</span>`).join('') || '<span class="muted">（空）</span>';
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderRuleInputs() {
+  const t = $('ruleType').value;
+  const map = {
+    prefix: '前缀内容 <input type="text" id="p1" value="[2026] ">',
+    suffix: '后缀内容 <input type="text" id="p1" value="_new">',
+    replace: '查找 <input type="text" id="p1" value="IMG_"> 替换为 <input type="text" id="p2" value="2023_">',
+    regex: '正则 <input type="text" id="p1" value="^IMG_"> 替换为 <input type="text" id="p2" value="2023_">'
+  };
+  $('ruleInputs').innerHTML = map[t];
+}
+
+function applyRule(name) {
+  const t = $('ruleType').value, cs = $('caseSensitive').checked;
+  const a = ($('p1')?.value ?? ''), b = ($('p2')?.value ?? '');
+  try {
+    if (t === 'prefix') return a + name;
+    if (t === 'suffix') { const i = name.lastIndexOf('.'); return i < 0 ? name + a : name.slice(0,i) + a + name.slice(i); }
+    if (t === 'replace') {
+      if (!a) return name;
+      if (cs) return name.split(a).join(b);
+      return name.replace(new RegExp(a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'), b);
+    }
+    if (t === 'regex') {
+      if (!a) return name;
+      return name.replace(new RegExp(a, cs ? 'g' : 'gi'), b);
+    }
+  } catch(e) { return name; }
+  return name;
+}
+
+function nameValid(n) {
+  if (!n || !n.trim()) return false;
+  if (/[<>:"/\\|?*]/.test(n)) return false;
+  const reserved = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)/i;
+  return !reserved.test(n);
+}
+
+function doPreview() {
+  previewData = [];
+  for (const from of fsState) {
+    const to = applyRule(from);
+    const caseOnly = from !== to && from.toLowerCase() === to.toLowerCase();
+    let status;
+    if (to === from) status = 'same';
+    else if (!nameValid(to)) status = 'bad';
+    else if (fsState.some(f => f !== from && f.toLowerCase() === to.toLowerCase())) status = 'conflict';
+    else status = 'ok';
+    previewData.push({ from, to, status, caseOnly });
+  }
+  const label = { ok:'有效', same:'无变化', bad:'无效', conflict:'冲突' };
+  const cls   = { ok:'ok', same:'same', bad:'bad', conflict:'warn' };
+  const rows = previewData.map(d =>
+    `<tr><td>${esc(d.from)}</td><td>${d.status==='same' ? '<span class="muted">—</span>' : esc(d.to)}</td>` +
+    `<td><span class="tag ${cls[d.status]}">${label[d.status]}</span>${d.caseOnly ? ' <span class="tag warn">两步法</span>' : ''}</td></tr>`).join('');
+  $('previewArea').innerHTML = `<table><tr><th>原文件名</th><th>新文件名</th><th>状态</th></tr>${rows}</table>`;
+  const hasValid = previewData.some(d => d.status === 'ok');
+  $('execBtn').disabled = !hasValid;
+  showMsg(hasValid ? `预览完成：${previewData.filter(d=>d.status==='ok').length} 条有效变更。注意确认弹窗文案将改为「操作已记录撤销日志，可回退」。` : '没有有效变更可执行。', hasValid ? 'info' : 'warn');
+}
+
+function nowStr() {
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function ruleSummary() {
+  const t = {prefix:'前缀添加',suffix:'后缀添加',replace:'字符串替换',regex:'正则替换'}[$('ruleType').value];
+  return `${t}: ${$('p1')?.value ?? ''}${['replace','regex'].includes($('ruleType').value) ? ' → ' + ($('p2')?.value ?? '') : ''}`;
+}
+
+function doExecute() {
+  const valid = previewData.filter(d => d.status === 'ok');
+  if (!valid.length) return;
+  const opId = 'op_' + nowStr();
+  const applied = valid.map(d => {
+    let viaTmp = null;
+    if (d.caseOnly) viaTmp = `__rename_tmp_${opId}_${d.to}`;
+    fsState = fsState.filter(f => f !== d.from);
+    fsState.push(d.to);
+    return { from: d.from, to: d.to, status: 'ok', case_only: d.caseOnly, via_tmp: viaTmp };
+  });
+  const op = {
+    version: 1, op_id: opId,
+    created_at: new Date().toLocaleString('zh-CN'),
+    base_dir: 'D:/demo', recursive: false,
+    rule_text: ruleSummary(),
+    rule: { type: $('ruleType').value, params: { find: $('p1')?.value ?? '', replace: $('p2')?.value ?? '' }, case_sensitive: $('caseSensitive').checked },
+    file_count: applied.length,
+    entries: applied,
+    undone: false, undone_at: null, undo_result: null
+  };
+  history.unshift(op);
+  if (history.length > 10) history.pop();
+  renderFiles(); renderHistory();
+  $('execBtn').disabled = true;
+  const caseNote = applied.some(e => e.case_only) ? '<br>其中含大小写改名，已按两步法执行：原文件 → 临时名 → 目标名（见日志 via_tmp）。' : '';
+  showMsg(`✅ 已重命名 ${applied.length} 个文件，日志已写入 history/${opId}.json。${caseNote}<br><b>旧版文案「此操作不可撤销！」已由撤销机制取代。</b>`, 'info');
+}
+
+function undoable() { return history.find(op => !op.undone) || null; }
+
+// 撤销前对单条 entry 的还原判定
+// 注意：大小写改名（case_only）在 Windows 上 from/to 是同一个文件（大小写不敏感），
+// 不能按"目标名已存在"判冲突，应视为可还原（两步法）
+function undoEntryState(e) {
+  if (e.case_only) {
+    return fsState.some(f => f.toLowerCase() === e.to.toLowerCase()) ? 'ok' : 'missing';
+  }
+  return !fsState.some(f => f.toLowerCase() === e.from.toLowerCase()) ? 'ok' : 'conflict';
+}
+
+function doUndo() {
+  const op = undoable();
+  if (!op) return;
+  const stLabel = { ok: '可还原', conflict: '冲突跳过（原文件名已被占用）', missing: '文件已不存在，跳过' };
+  const stCls = { ok: 'ok', conflict: 'warn', missing: 'same' };
+  const rows = op.entries.map((e) => {
+    const st = undoEntryState(e);
+    const via = e.case_only ? ' <span class="tag warn">两步法</span>' : '';
+    return `<tr><td>${esc(e.to)}</td><td>${esc(e.from)}</td><td><span class="tag ${stCls[st]}">${stLabel[st]}</span>${via}</td></tr>`;
+  }).join('');
+  $('undoOpId').textContent = op.op_id;
+  $('undoPreviewBody').innerHTML = `<table><tr><th>当前名</th><th>还原为</th><th>状态</th></tr>${rows}</table>`;
+  $('undoModal').classList.add('show');
+}
+
+function closeUndoModal(){ $('undoModal').classList.remove('show'); }
+
+function confirmUndo() {
+  const op = undoable();
+  if (!op) { closeUndoModal(); return; }
+  let restored = 0; const skipped = [];
+  for (const e of [...op.entries].reverse()) {
+    const st = undoEntryState(e);
+    if (st === 'ok') {
+      fsState = fsState.filter(f => f.toLowerCase() !== e.to.toLowerCase());
+      fsState.push(e.from);
+      restored++;
+    } else {
+      skipped.push({ from: e.from, reason: st === 'conflict' ? '目标名已存在，跳过' : '文件已不存在，跳过' });
+    }
+  }
+  op.undone = true;
+  op.undone_at = new Date().toLocaleString('zh-CN');
+  op.undo_result = { restored, skipped };
+  renderFiles(); renderHistory();
+  closeUndoModal();
+  showMsg(skipped.length ? `↩️ 已还原 ${restored} 个文件，${skipped.length} 个因目标名已存在被跳过（详情见该日志 undo_result）。` : `↩️ 已完整还原 ${restored} 个文件。`, skipped.length ? 'warn' : 'info');
+}
+
+function renderHistory() {
+  $('undoBtn').disabled = !undoable();
+  $('opList').innerHTML = history.map((op,i) =>
+    `<li class="${op.undone?'undone':''}" onclick="showJson(${i})">
+      <b>${op.undone ? '已撤销 · ' : ''}${op.rule_text}</b> — ${op.file_count} 个文件
+      <div class="meta">${op.op_id} · ${op.created_at}${op.undone ? ' · 撤销于 ' + op.undone_at : ''}</div>
+    </li>`).join('') || '<li class="muted" style="border:none;cursor:default">暂无操作，先执行一次重命名</li>';
+}
+
+function showJson(i) {
+  $('jsonView').innerHTML = `<h3 style="margin-bottom:6px">history/${history[i].op_id}.json</h3><pre>${esc(JSON.stringify(history[i], null, 2))}</pre>`;
+}
+
+function showMsg(html, kind) {
+  const el = $('msg');
+  el.className = 'msg show ' + kind;
+  el.innerHTML = html;
+}
+
+renderRuleInputs(); resetSandbox();
+</script>
+</body>
+</html>
