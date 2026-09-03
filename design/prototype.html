@@ -72,8 +72,8 @@
 </header>
 
 <div class="steps">
-  <div class="step on">① 原型 HTML · 验证思路 ← 当前</div>
-  <div class="step">② 流程图（Mermaid）</div>
+  <div class="step done">① 原型 HTML · 思路已确认 ✅</div>
+  <div class="step on">② 流程图（Mermaid）← 当前</div>
   <div class="step">③ 实际产物（refactor 分支）</div>
 </div>
 
@@ -101,7 +101,7 @@
     <div class="row">
       <button class="primary" onclick="doPreview()">预览修改</button>
       <button id="execBtn" class="danger" onclick="doExecute()" disabled>执行修改</button>
-      <button id="undoBtn" class="primary" onclick="doUndo()" disabled>撤销上次操作</button>
+      <button id="undoBtn" class="primary" onclick="doUndo()" disabled>撤销最近一次</button>
     </div>
 
     <div id="previewArea"></div>
@@ -109,7 +109,7 @@
   </div>
 
   <div class="panel">
-    <h3>操作历史（保留最近 10 次，点击看 JSON）</h3>
+    <h3>操作历史（最近 10 次可撤销 · 点条目看 JSON · 可任意跳选撤销）</h3>
     <ul class="oplist" id="opList"></ul>
     <div id="jsonView"><p class="muted">点击上方任一操作查看其撤销日志 JSON 结构提案。</p></div>
   </div>
@@ -157,12 +157,12 @@ $ rename-cli --undo                # 撤销最近一次
 $ rename-cli --undo --list         # 列出可撤销的操作栈</pre>
 </div>
 
-<h2>④ 待你拍板的决策点</h2>
-<div class="decide"><b>1. GUI 框架（最重要）</b>现有代码是 <b>wxPython</b>（<code>import wx</code>），但子 Prompt #19 写的是「tkinter（不换框架）」，两者矛盾。A. 按 prompt 迁移 tkinter：零第三方依赖、exe 体积小，但要重写全部 UI；B. 保留 wxPython：改 prompt，UI 不动只加撤销。本原型的布局对两者通用。</div>
-<div class="decide"><b>2. 撤销是否需要确认</b>原型采用「先弹还原预览（标明每条 可还原/冲突跳过），点确认才执行」。也可以做成一键直接撤。</div>
-<div class="decide"><b>3. 撤销深度</b>Prompt 定的是保留最近 10 次可逐步回退。已撤销的日志是归档保留（可追溯）还是直接删除？原型按「归档保留、不再可撤」处理。</div>
-<div class="decide"><b>4. 嵌套撤销的顺序</b>严格按栈：只能撤最新一次，撤完才能撤上一次（原型如此）。要不要支持任意跳选某一次操作来撤？（不支持则实现简单、心智模型清晰）</div>
-<div class="decide"><b>5. 日志目录</b><code>%APPDATA%/rename-file/history/</code>（提案，跨工作目录可用）还是放在操作目标目录里（随目录走，但会污染用户目录）？</div>
+<h2>④ 决策记录（已全部拍板 ✅ 2026-09-04）</h2>
+<div class="decide" style="border-left-color:var(--ok);background:#f0fdf4"><b>1. GUI 框架：迁移 tkinter（按子 Prompt #19）</b>现有代码实为 wxPython，第③步将把 GUI 层重写为 tkinter（标准库、零第三方依赖、exe 更小）；core 与 UI 分离，撤销引擎不依赖任何 UI 框架。原型的面板布局即为 tkinter 版的目标布局。</div>
+<div class="decide" style="border-left-color:var(--ok);background:#f0fdf4"><b>2. 撤销需要确认</b>撤销一律先弹还原预览（逐条标明 可还原/冲突跳过/已被后续操作改名），点确认才执行。</div>
+<div class="decide" style="border-left-color:var(--ok);background:#f0fdf4"><b>3. 已撤销日志归档保留（可追溯）</b>undone 日志不删除；可撤销窗口为最近 10 份，更早的与已撤销的全部归档在 history 目录。</div>
+<div class="decide" style="border-left-color:var(--ok);background:#f0fdf4"><b>4. 支持任意跳选撤销</b>历史列表里每一条可撤销操作都能单独选撤，不要求按栈顺序；被后续操作改名的条目自动跳过并留痕（本原型已实现并回归验证）。</div>
+<div class="decide" style="border-left-color:var(--ok);background:#f0fdf4"><b>5. 日志目录：跨工作目录方案</b><code>%APPDATA%/rename-file/history/op_*.json</code>（提案已采纳，跨工作目录可用，不污染用户目标目录）。</div>
 
 </main>
 
@@ -171,7 +171,7 @@ $ rename-cli --undo --list         # 列出可撤销的操作栈</pre>
   <div class="modal">
     <h4>撤销预览：还原操作 <span id="undoOpId"></span></h4>
     <div id="undoPreviewBody"></div>
-    <p class="muted" style="font-size:12px">「冲突跳过」= 原文件名已被新文件占用。已跳过的条目不覆盖、不报错，留痕在 undo_result 里。</p>
+    <p class="muted" style="font-size:12px">支持任意跳选：撤销较早的操作时，若它的输出文件已被后续操作改名，该条会标记「跳过」。<br>「冲突跳过」= 还原名被其他文件占用，绝不覆盖。「撤销确认」= 已拍板：必须先看预览再确认。</p>
     <div class="actions">
       <button onclick="closeUndoModal()">取消</button>
       <button class="primary" onclick="confirmUndo()">确认撤销</button>
@@ -303,20 +303,26 @@ function doExecute() {
 
 function undoable() { return history.find(op => !op.undone) || null; }
 
-// 撤销前对单条 entry 的还原判定
-// 注意：大小写改名（case_only）在 Windows 上 from/to 是同一个文件（大小写不敏感），
-// 不能按"目标名已存在"判冲突，应视为可还原（两步法）
+// 撤销前对单条 entry 的还原判定（任意跳选模型，不能假设"to 一定存在"）
+// - 非 case_only：必须 e.to 当前存在（要被改回的那个文件得在），且 e.from 名字空闲
+// - case_only（Windows 大小写不敏感）：from/to 是同一个文件，只要它还在就算可还原（两步法）
 function undoEntryState(e) {
+  const toPresent = fsState.some(f => f.toLowerCase() === e.to.toLowerCase());
   if (e.case_only) {
-    return fsState.some(f => f.toLowerCase() === e.to.toLowerCase()) ? 'ok' : 'missing';
+    return toPresent ? 'ok' : 'missing';
   }
-  return !fsState.some(f => f.toLowerCase() === e.from.toLowerCase()) ? 'ok' : 'conflict';
+  const fromFree = !fsState.some(f => f.toLowerCase() === e.from.toLowerCase());
+  if (!toPresent) return 'missing';
+  return fromFree ? 'ok' : 'conflict';
 }
 
-function doUndo() {
-  const op = undoable();
-  if (!op) return;
-  const stLabel = { ok: '可还原', conflict: '冲突跳过（原文件名已被占用）', missing: '文件已不存在，跳过' };
+let pendingUndoIdx = -1;
+
+function doUndo(i) {
+  const op = (typeof i === 'number') ? history[i] : undoable();
+  if (!op || op.undone) return;
+  pendingUndoIdx = history.indexOf(op);
+  const stLabel = { ok: '可还原', conflict: '冲突跳过（还原名已被占用）', missing: '跳过（该文件已被后续操作改名或删除）' };
   const stCls = { ok: 'ok', conflict: 'warn', missing: 'same' };
   const rows = op.entries.map((e) => {
     const st = undoEntryState(e);
@@ -328,11 +334,11 @@ function doUndo() {
   $('undoModal').classList.add('show');
 }
 
-function closeUndoModal(){ $('undoModal').classList.remove('show'); }
+function closeUndoModal(){ $('undoModal').classList.remove('show'); pendingUndoIdx = -1; }
 
 function confirmUndo() {
-  const op = undoable();
-  if (!op) { closeUndoModal(); return; }
+  const op = history[pendingUndoIdx];
+  if (!op || op.undone) { closeUndoModal(); return; }
   let restored = 0; const skipped = [];
   for (const e of [...op.entries].reverse()) {
     const st = undoEntryState(e);
@@ -341,8 +347,19 @@ function confirmUndo() {
       fsState.push(e.from);
       restored++;
     } else {
-      skipped.push({ from: e.from, reason: st === 'conflict' ? '目标名已存在，跳过' : '文件已不存在，跳过' });
+      skipped.push({
+        from: e.from,
+        reason: st === 'conflict' ? '还原名已存在，跳过'
+                                  : `当前找不到 ${e.to}（已被后续操作改名或删除），跳过`
+      });
     }
+  }
+  // 关键规则：一条都没还原时，撤销不成立——操作保持"可撤销"，
+  // 提示先撤销占用了其输出文件的后续操作，否则文件会卡在中间状态无法找回
+  if (restored === 0) {
+    closeUndoModal();
+    showMsg('⚠️ 没有任何条目被还原：该操作的输出文件已被后续操作改名或占用。请先撤销对应的后续操作，再撤销本操作。', 'warn');
+    return;
   }
   op.undone = true;
   op.undone_at = new Date().toLocaleString('zh-CN');
@@ -354,11 +371,15 @@ function confirmUndo() {
 
 function renderHistory() {
   $('undoBtn').disabled = !undoable();
-  $('opList').innerHTML = history.map((op,i) =>
-    `<li class="${op.undone?'undone':''}" onclick="showJson(${i})">
-      <b>${op.undone ? '已撤销 · ' : ''}${op.rule_text}</b> — ${op.file_count} 个文件
+  $('opList').innerHTML = history.map((op,i) => {
+    const head = `<div style="cursor:pointer" onclick="showJson(${i})">
+      <b>${op.undone ? '已撤销·归档 · ' : ''}${op.rule_text}</b> — ${op.file_count} 个文件
       <div class="meta">${op.op_id} · ${op.created_at}${op.undone ? ' · 撤销于 ' + op.undone_at : ''}</div>
-    </li>`).join('') || '<li class="muted" style="border:none;cursor:default">暂无操作，先执行一次重命名</li>';
+    </div>`;
+    const act = op.undone ? '' :
+      `<button style="margin-top:6px;font-size:12px;padding:3px 10px" onclick="event.stopPropagation();doUndo(${i})">撤销此操作</button>`;
+    return `<li class="${op.undone?'undone':''}">${head}${act}</li>`;
+  }).join('') || '<li class="muted" style="border:none;cursor:default">暂无操作，先执行一次重命名</li>';
 }
 
 function showJson(i) {
