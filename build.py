@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 批量文件名修改工具 - 打包脚本
 使用PyInstaller将应用程序打包成可执行文件
 """
 
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -164,9 +163,6 @@ def build_with_pyinstaller():
         "--windowed",  # 窗口模式，不显示控制台
         "--icon=NONE",  # 不使用图标
         "--add-data=README.md;.",  # 包含README文件
-        "--hidden-import=wx.lib.scrolledpanel",
-        "--hidden-import=pathlib",
-        "--hidden-import=logging",
         "--clean",  # 清理临时文件
         "--noconfirm",  # 不确认覆盖
         "main.py"
@@ -221,10 +217,11 @@ def create_distribution_package():
 版本: 1.0.0
 构建时间: {}
 功能:
-- 正则表达式匹配文件名
-- 支持前缀、后缀、字符串替换、正则替换
+- 四类重命名规则：前缀 / 后缀 / 字符串替换 / 正则替换
+- 撤销功能：操作日志 + 任意跳选撤销 + 嵌套回退（最近 10 次）
+- Windows 大小写改名两步法，冲突绝不覆盖
+- CLI：rename-cli --dry-run / --apply / --undo
 - 安全预览机制
-- 跨平台支持
 """.format(__import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
     with open(dist_dir / "版本信息.txt", "w", encoding="utf-8") as f:
