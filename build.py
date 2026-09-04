@@ -10,6 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Windows 控制台默认 cp1252，中文输出会崩；强制 UTF-8（CI 与本机都适用）
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 
 def clean_build_dirs():
     """清理构建目录"""
