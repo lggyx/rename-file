@@ -1,6 +1,6 @@
 [project]
 name = "rename-file"
-version = "0.2.0"
+version = "1.0.0"
 description = "批量文件名修改工具 - 支持正则表达式匹配和多种修改规则"
 readme = "README.md"
 requires-python = ">=3.12"
