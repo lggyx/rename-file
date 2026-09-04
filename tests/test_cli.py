@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """CLI 测试：dry-run / apply / undo / --list / 参数解析 / 退出码。
 
 直接调用 cli.main(argv)，不走子进程；文件系统用 tmp_path 沙箱，
@@ -65,7 +64,7 @@ def test_apply_partial_failure_exits_one(sandbox, tmp_path):
     """Windows 下重命名被占用的文件会失败：一条留痕、其余正常、退出码 1。"""
     f1 = touch(sandbox, "IMG_0001.jpg")
     touch(sandbox, "IMG_0002.jpg")
-    with open(f1, "rb") as lock:  # 打开的句柄（无 FILE_SHARE_DELETE）阻塞重命名
+    with open(f1, "rb"):  # 打开的句柄（无 FILE_SHARE_DELETE）阻塞重命名，保持到块结束
         code = main(["--apply", "--dir", str(sandbox), "--history-dir", str(tmp_path / "h"),
                      "--rule", "regex", r"^IMG_", "2023_"])
     assert code == 1
