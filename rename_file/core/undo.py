@@ -21,6 +21,12 @@ UNDO_STATE_OK = "ok"
 UNDO_STATE_CONFLICT = "conflict"    # 还原名被其他文件占用
 UNDO_STATE_MISSING = "missing"      # 输出文件已不存在（被后续操作改名/删除）
 
+UNDO_STATE_LABELS = {
+    UNDO_STATE_OK: "可还原",
+    UNDO_STATE_CONFLICT: "冲突跳过（还原名已被占用）",
+    UNDO_STATE_MISSING: "跳过（已被后续操作改名或删除）",
+}
+
 
 def _dir_names(directory: Path) -> list[str]:
     return [p.name for p in directory.iterdir()]

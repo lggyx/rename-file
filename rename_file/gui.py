@@ -22,6 +22,8 @@ from tkinter import font as tkfont
 from rename_file.core import (
     RULE_TYPE_BY_LABEL,
     RULE_TYPE_LABELS,
+    STATUS_LABELS,
+    UNDO_STATE_LABELS,
     HistoryStore,
     LogWriteError,
     apply_undo,
@@ -30,6 +32,7 @@ from rename_file.core import (
     find_tmp_residue,
     normalize_rule,
     plan_undo,
+    rule_summary,
     scan_files,
 )
 
@@ -52,19 +55,6 @@ FONT = ("Segoe UI", 10)
 FONT_SMALL = ("Segoe UI", 9)
 FONT_BOLD = ("Segoe UI Semibold", 11)
 FONT_MONO = ("Consolas", 9)
-
-PREVIEW_STATUS_LABELS = {
-    "ok": "有效",
-    "same": "无变化",
-    "invalid": "无效",
-    "conflict": "冲突",
-}
-UNDO_STATE_LABELS = {
-    "ok": "可还原",
-    "conflict": "冲突跳过（还原名已被占用）",
-    "missing": "跳过（已被后续操作改名或删除）",
-}
-
 
 def _lerp_hex(a: str, b: str, t: float) -> str:
     a, b = a.lstrip("#"), b.lstrip("#")
@@ -233,15 +223,6 @@ def _enable_dark_titlebar(root: tk.Tk):
                 break
     except (OSError, AttributeError):
         return  # 非 Windows/DWM 不可用：保持系统默认标题栏
-
-
-def rule_summary(rule: dict) -> str:
-    """规则摘要（历史面板展示用）：如「正则替换: ^IMG_ → 2023_」。"""
-    label = RULE_TYPE_LABELS[rule["type"]]
-    params = rule.get("params") or {}
-    if rule["type"] in ("replace", "regex"):
-        return f"{label}: {params.get('find', '')} → {params.get('replace', '')}"
-    return f"{label}: {params.get('text', '')}"
 
 
 class RenameApp:
@@ -471,7 +452,7 @@ class RenameApp:
         self.preview = build_preview(self.files, self._current_rule())
         self.preview_tree.delete(*self.preview_tree.get_children())
         for e in self.preview:
-            status = PREVIEW_STATUS_LABELS[e.status]
+            status = STATUS_LABELS[e.status]
             if e.status == "ok" and e.case_only:
                 status += " · 两步法"
             new_name = "—" if e.status == "same" else e.new_name

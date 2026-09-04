@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
 
+[project.scripts]
+rename-cli = "rename_file.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",

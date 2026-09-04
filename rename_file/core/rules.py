@@ -35,6 +35,15 @@ def normalize_rule(rule_type: str, params: dict | None = None,
     }
 
 
+def rule_summary(rule: dict) -> str:
+    """规则摘要（历史/CLI 展示用）：如「正则替换: ^IMG_ → 2023_」。"""
+    label = RULE_TYPE_LABELS[rule["type"]]
+    params = rule.get("params") or {}
+    if rule["type"] in (RULE_REPLACE, RULE_REGEX):
+        return f"{label}: {params.get('find', '')} → {params.get('replace', '')}"
+    return f"{label}: {params.get('text', '')}"
+
+
 def apply_rule(filename: str, rule: dict) -> str:
     """对单个文件名应用规则，返回新文件名（不校验合法性，非法正则返回原名）。"""
     rtype = rule["type"]

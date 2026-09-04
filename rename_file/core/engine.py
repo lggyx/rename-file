@@ -21,6 +21,14 @@ STATUS_INVALID = "invalid"  # 无效：非法字符 / 保留名
 STATUS_CONFLICT = "conflict"  # 冲突：目标名被其他文件占用
 STATUS_FAILED = "failed"    # 预览有效但执行时失败（运行时留痕）
 
+STATUS_LABELS = {
+    STATUS_OK: "有效",
+    STATUS_SAME: "无变化",
+    STATUS_INVALID: "无效",
+    STATUS_CONFLICT: "冲突",
+    STATUS_FAILED: "失败",
+}
+
 
 class LogWriteError(RuntimeError):
     """撤销日志写入失败（目录不可写等）。此时未改动任何文件。"""

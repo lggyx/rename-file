@@ -13,6 +13,7 @@ from rename_file.core.engine import (
     STATUS_CONFLICT,
     STATUS_FAILED,
     STATUS_INVALID,
+    STATUS_LABELS,
     STATUS_OK,
     STATUS_SAME,
     LogWriteError,
@@ -29,9 +30,15 @@ from rename_file.core.rules import (
     RULE_TYPE_LABELS,
     apply_rule,
     normalize_rule,
+    rule_summary,
 )
 from rename_file.core.scanner import scan_files
-from rename_file.core.undo import apply_undo, find_tmp_residue, plan_undo
+from rename_file.core.undo import (
+    UNDO_STATE_LABELS,
+    apply_undo,
+    find_tmp_residue,
+    plan_undo,
+)
 from rename_file.core.validate import (
     INVALID_CHARS,
     RESERVED_NAMES,
@@ -53,8 +60,10 @@ __all__ = [
     "STATUS_CONFLICT",
     "STATUS_FAILED",
     "STATUS_INVALID",
+    "STATUS_LABELS",
     "STATUS_OK",
     "STATUS_SAME",
+    "UNDO_STATE_LABELS",
     "HistoryStore",
     "LogWriteError",
     "PreviewEntry",
@@ -70,5 +79,6 @@ __all__ = [
     "names_equal",
     "normalize_rule",
     "plan_undo",
+    "rule_summary",
     "scan_files",
 ]
